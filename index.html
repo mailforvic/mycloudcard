@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon.png">
+  <title>高级记忆闪卡 Pro</title>
+  <style>
+    :root {
+      --bg: #0b1220; --panel: rgba(255, 255, 255, 0.06); --border: rgba(255, 255, 255, 0.14);
+      --text: rgba(255, 255, 255, 0.92); --muted: rgba(255, 255, 255, 0.65);
+      --accent: #6ee7ff; --accent2: #a78bfa; --radius: 18px; --card-speed: 0.6s;
+      --color-learning: #ff6b6b; --color-ok: rgba(110, 231, 255, 0.3); --color-mastered: #51cf66;
+    }
+    html { color-scheme: dark; } * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 10%, rgba(110, 231, 255, 0.1), transparent),
+                  radial-gradient(1000px 700px at 80% 20%, rgba(167, 139, 250, 0.1), transparent), #070b14;
+      color: var(--text); min-height: 100vh; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom);
+    }
+    header { padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .brand h1 { font-size: 20px; margin: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    main { width: min(1200px, 98vw); margin: 0 auto; padding: 0 12px 24px; flex: 1; display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; padding: 0 8px 80px; }
+      .sidebar { display: none; }
+      .sidebar.active { display: flex; position: fixed; inset: 0; z-index: 1000; background: #070b14; padding: 20px; padding-top: env(safe-area-inset-top); overflow-y: auto; }
+      .card-viewport { height: 45vh !important; min-height: 380px !important; }
+    }
+
+    .card-fade-in { animation: cardSlideIn 0.3s ease-out; }
+    @keyframes cardSlideIn { from { opacity: 0.5; } to { opacity: 1; } }
+
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); backdrop-filter: blur(12px); display: flex; flex-direction: column; }
+    .panel .hd { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .panel .bd { padding: 16px; gap: 12px; display: flex; flex-direction: column; }
+
+    .progress-container { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 99px; overflow: hidden; margin-bottom: 10px; }
+    #progressBar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.4s ease; }
+
+    /* 3D 舞台 */
+    .card-viewport { perspective: 2000px; width: 100%; height: 440px; cursor: pointer; position: relative; }
+    .card-inner { position: absolute; inset: 0; transition: transform var(--card-speed) cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d; }
+    .card-inner.is-flipped { transform: rotateY(180deg); }
+
+    /* 卡片面 */
+    .card-face {
+      position: absolute; inset: 0;
+      backface-visibility: hidden; -webkit-backface-visibility: hidden;
+      border-radius: var(--radius); border: 2px solid var(--border);
+      padding: 30px; display: flex; justify-content: center; align-items: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5); overflow: hidden;
+      transition: all 0.4s ease;
+    }
+    .card-front {
+      z-index: 2; transform: rotateY(0deg);
+      background: linear-gradient(135deg, #1a2639 0%, #0b1220 100%);
+      border-color: rgba(110, 231, 255, 0.3);
+    }
+    .card-back {
+      transform: rotateY(180deg); z-index: 1;
+      background: linear-gradient(135deg, #251b3d 0%, #0b1220 100%);
+      border-color: rgba(167, 139, 250, 0.3);
+    }
+    /* 背面斜线纹理水印 */
+    .card-back::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 18px,
+        rgba(167, 139, 250, 0.06) 18px,
+        rgba(167, 139, 250, 0.06) 19px
+      );
+      pointer-events: none;
+    }
+
+    /* 分组视觉覆盖 — 卡片整体变色 */
+    .card-viewport[data-group="learning"] .card-front,
+    .card-viewport[data-group="learning"] .card-back {
+      background: linear-gradient(135deg, rgba(255,80,80,0.25) 0%, #0b1220 100%);
+      border-color: #ff6b6b;
+      box-shadow: 0 0 40px rgba(255,80,80,0.35), 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .card-viewport[data-group="mastered"] .card-front,
+    .card-viewport[data-group="mastered"] .card-back {
+      background: linear-gradient(135deg, rgba(60,220,100,0.25) 0%, #0b1220 100%);
+      border-color: #51cf66;
+      box-shadow: 0 0 40px rgba(60,220,100,0.35), 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .card-viewport[data-group="ok"] .card-front,
+    .card-viewport[data-group="ok"] .card-back {
+      background: linear-gradient(135deg, rgba(255,210,60,0.20) 0%, #0b1220 100%);
+      border-color: #ffd43c;
+      box-shadow: 0 0 40px rgba(255,210,60,0.25), 0 20px 50px rgba(0,0,0,0.5);
+    }
+
+    .card-content { font-size: 52px; font-weight: 700; text-align: center; line-height: 1.3; word-break: break-word; white-space: pre-wrap; width: 100%; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+
+    /* 例句浮窗 */
+    .example-popup {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 90%; max-height: 85%; overflow-y: auto; background: rgba(15, 20, 35, 0.98); backdrop-filter: blur(20px);
+      padding: 25px; border-radius: 20px; border: 1px solid var(--accent2);
+      font-size: 19px; color: var(--accent); z-index: 2000; display: none; box-shadow: 0 30px 70px rgba(0,0,0,0.9);
+      animation: popAnim 0.3s cubic-bezier(0.17, 0.89, 0.32, 1.28); line-height: 1.6;
+    }
+    @keyframes popAnim { from { opacity: 0; transform: translate(-50%, -45%) scale(0.9); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    select, button, input { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid var(--border); padding: 10px 14px; border-radius: 12px; font-size: 14px; transition: 0.2s; cursor: pointer; }
+    select option { background: #1a2639; color: var(--text); }
+    select option:checked { background: rgba(110, 231, 255, 0.2); }
+    .btn-primary { background: var(--accent); color: #000; font-weight: 700; border: none; }
+    .btn-primary:active { transform: scale(0.96); }
+
+    #btnSpeak { background: rgba(110, 231, 255, 0.15); border-color: var(--accent); }
+    #btnExample { background: rgba(167, 139, 250, 0.15); border-color: var(--accent2); }
+
+    .seg { display: inline-flex; background: rgba(0, 0, 0, 0.4); padding: 6px; border-radius: 16px; border: 1px solid var(--border); }
+    .seg input { display: none; }
+    .seg label { padding: 10px 22px; border-radius: 12px; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--muted); transition: 0.2s; }
+    .seg input:checked+label[for="g1"] { background: var(--color-learning); color: white; }
+    .seg input:checked+label[for="g2"] { background: rgba(255, 255, 255, 0.2); color: white; }
+    .seg input:checked+label[for="g3"] { background: var(--color-mastered); color: white; }
+
+    #dropZone { position: fixed; inset: 0; background: rgba(110, 231, 255, 0.15); backdrop-filter: blur(8px); z-index: 3000; display: none; align-items: center; justify-content: center; border: 4px dashed var(--accent); }
+
+    /* 字段选择面板 — 常驻左侧栏 */
+    #columnPicker { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+    #columnPicker.empty { opacity: 0.4; pointer-events: none; }
+    #columnPicker label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+    #columnPicker .col-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+    #columnPicker select { width: 100%; font-size: 13px; }
+    #columnPicker .col-count { font-size: 11px; color: var(--accent); text-align: center; }
+
+    /* 键盘提示 */
+    .key-hint { font-size: 11px; color: var(--muted); text-align: center; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="dropZone"><h1>释放文件以导入</h1></div>
+  <header>
+    <div class="brand"><h1>Memory FlashCards Pro</h1></div>
+    <div class="row"><button id="toggleSidebar" style="display:none">设置</button></div>
+  </header>
+  <main>
+    <aside class="panel sidebar" id="sidebar">
+      <div class="hd"><span>控制台</span><button onclick="document.getElementById('sidebar').classList.remove('active')" id="closeSidebar" style="display:none">✕</button></div>
+      <div class="bd">
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv,.json" style="width:100%">
+
+        <!-- 字段选择面板 — 常驻，切换后自动重新生成 -->
+        <div id="columnPicker" class="empty">
+          <div class="col-row">
+            <div><label>正面字段</label><select id="frontCol"><option>未载入</option></select></div>
+            <div><label>背面字段</label><select id="backCol"><option>未载入</option></select></div>
+          </div>
+          <div class="col-count" id="colCount">选择文件后自动识别字段</div>
+        </div>
+
+        <div class="row"><button class="btn-primary" id="btnParse" style="flex:1">解析文件</button><button id="btnClear">清空</button></div>
+        <div class="row"><button id="btnSaveLocal" style="flex:1">保存进度</button><button id="btnExport">导出 JSON</button></div>
+        <select id="orderSelect" style="width:100%"><option value="seq">原始顺序</option><option value="shuffle">随机打乱</option></select>
+        <select id="groupFilter" style="width:100%"><option value="all">所有分组</option><option value="learning">🔴 不太熟练</option><option value="ok"> 一般</option><option value="mastered">🟢 很熟悉</option></select>
+        <div class="key-hint">快捷键：←→ 切换卡片 · 空格 翻面 · ↑↓ 切换分组</div>
+      </div>
+    </aside>
+    <section class="flash-zone">
+      <div class="progress-container"><div id="progressBar"></div></div>
+      <div class="card-viewport" id="cardContainer" data-group="ok">
+        <div id="examplePopup" class="example-popup" onclick="this.style.display='none'"></div>
+        <div class="card-inner" id="cardInner">
+          <div class="card-face card-front"><div class="card-content" id="frontText">等待载入...</div></div>
+          <div class="card-face card-back"><div class="card-content" id="backText"></div></div>
+        </div>
+      </div>
+      <div class="panel" style="padding:15px; margin-top: 25px;">
+        <div class="row" style="justify-content: space-between; align-items: center;">
+          <div class="seg">
+            <input type="radio" name="g" id="g1" value="learning"><label for="g1">不熟</label>
+            <input type="radio" name="g" id="g2" value="ok" checked><label for="g2">一般</label>
+            <input type="radio" name="g" id="g3" value="mastered"><label for="g3">熟练</label>
+          </div>
+          <div class="row">
+            <button id="btnExample">📖 例句</button>
+            <button id="btnSpeak">🔊 朗读</button>
+            <button id="btnPrev">上一页</button>
+            <div id="cardIndex" style="min-width:50px; text-align:center; font-weight:bold">0 / 0</div>
+            <button id="btnNext" class="btn-primary">下一页</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+    let state = {
+      cards: [], viewIds: [], index: 0, isFlipped: false,
+      config: { order: 'seq', filter: 'all' },
+      pendingRows: [], headers: [], frontIdx: 0, backIdx: 1
+    };
+    const els = {
+      cardContainer: document.getElementById('cardContainer'),
+      cardInner: document.getElementById('cardInner'),
+      frontText: document.getElementById('frontText'),
+      backText: document.getElementById('backText'),
+      progressBar: document.getElementById('progressBar'),
+      cardIndex: document.getElementById('cardIndex'),
+      fileInput: document.getElementById('fileInput'),
+      groupInputs: [document.getElementById('g1'), document.getElementById('g2'), document.getElementById('g3')],
+      popup: document.getElementById('examplePopup'),
+      columnPicker: document.getElementById('columnPicker'),
+      frontCol: document.getElementById('frontCol'),
+      backCol: document.getElementById('backCol'),
+      colCount: document.getElementById('colCount')
+    };
+
+    function playTick() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.1);
+      } catch(e) {}
+    }
+
+    function speak(text, lang = 'en-US') {
+      window.speechSynthesis.cancel();
+      const msg = new SpeechSynthesisUtterance(text);
+      msg.lang = lang; msg.rate = 0.95;
+      window.speechSynthesis.speak(msg);
+    }
+
+    // 修复版自动字号：基于 getBoundingClientRect 精确检测溢出
+    function autoSizeText(el) {
+      const face = el.closest('.card-face');
+      if (!face) return;
+      const padding = 60;
+      const maxHeight = face.clientHeight - padding;
+      const maxWidth = face.clientWidth - padding;
+      let size = 52;
+      el.style.fontSize = size + 'px';
+      while (size > 14) {
+        const rect = el.getBoundingClientRect();
+        if (rect.height > maxHeight || el.scrollWidth > maxWidth) {
+          size -= 2;
+          el.style.fontSize = size + 'px';
+        } else break;
+      }
+    }
+
+    window.onload = () => {
+      initDragAndDrop(); initEventListeners(); initTouchEvents(); loadFromStorage();
+      if (window.innerWidth < 900) document.getElementById('toggleSidebar').style.display = 'block';
+    };
+
+    function initEventListeners() {
+      document.getElementById('btnParse').onclick = handleFileUpload;
+      document.getElementById('btnNext').onclick = () => move(1);
+      document.getElementById('btnPrev').onclick = () => move(-1);
+      document.getElementById('cardContainer').onclick = (e) => {
+        if (e.target.id === 'examplePopup' || e.target.closest('#examplePopup')) return;
+        playTick(); toggleFlip();
+      };
+
+      // 字段切换 → 自动重新生成卡片
+      els.frontCol.onchange = () => { state.frontIdx = parseInt(els.frontCol.value); regenerateCards(); };
+      els.backCol.onchange = () => { state.backIdx = parseInt(els.backCol.value); regenerateCards(); };
+
+      document.getElementById('btnSpeak').onclick = (e) => {
+        e.stopPropagation(); playTick();
+        const card = getCurrentCard(); if (!card) return;
+        speak(card.front, 'en-US');
+      };
+
+      document.getElementById('btnExample').onclick = async (e) => {
+        e.stopPropagation(); playTick();
+        const card = getCurrentCard(); if (!card) return;
+        const word = card.front.split(/[^a-zA-Z]/).find(w => w.length > 1) || card.front;
+        els.popup.innerHTML = "<div style='text-align:center'>正在检索语境例句...</div>";
+        els.popup.style.display = 'block';
+        try {
+          const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+          const data = await res.json();
+          let ex = "";
+          if (data && data[0]) {
+            data[0].meanings.forEach(m => m.definitions.forEach(d => { if (d.example && !ex) ex = d.example; }));
+          }
+          els.popup.innerHTML = ex
+            ? `<div style='color:var(--accent2); font-weight:bold; margin-bottom:10px'>📖 语境例句:</div><div style='font-style:italic; color:#fff'>"${ex}"</div><div style='margin-top:15px; font-size:12px; opacity:0.6; text-align:center'>点击任意处关闭</div>`
+            : "❌ 该词条暂无例句";
+        } catch {
+          els.popup.innerHTML = "️ 网络请求失败";
+        }
+      };
+
+      document.getElementById('btnSaveLocal').onclick = () => {
+        localStorage.setItem('fc_data', JSON.stringify({
+          cards: state.cards, config: state.config,
+          headers: state.headers, frontIdx: state.frontIdx, backIdx: state.backIdx
+        }));
+        alert('学习进度已保存！');
+      };
+      document.getElementById('btnExport').onclick = exportData;
+      document.getElementById('btnClear').onclick = () => {
+        if (confirm('确定清空数据？')) {
+          state.cards = []; state.pendingRows = []; state.headers = [];
+          els.columnPicker.classList.add('empty');
+          rebuildView();
+        }
+      };
+
+      document.getElementById('orderSelect').onchange = e => { state.config.order = e.target.value; rebuildView(); };
+      document.getElementById('groupFilter').onchange = e => { state.config.filter = e.target.value; rebuildView(); };
+
+      els.groupInputs.forEach(input => {
+        input.onchange = () => {
+          const card = getCurrentCard();
+          if (card) {
+            card.group = input.value;
+            els.cardContainer.setAttribute('data-group', card.group);
+            if (state.config.filter !== 'all' && card.group !== state.config.filter) setTimeout(rebuildView, 300);
+            updateStats();
+          }
+        };
+      });
+    }
+
+    function move(step) {
+      if (state.viewIds.length <= 1 && step !== 0) return;
+      els.popup.style.display = 'none';
+      playTick();
+      state.index = (state.index + step + state.viewIds.length) % state.viewIds.length;
+      renderCard(); updateStats();
+      const v = document.getElementById('cardContainer');
+      v.classList.remove('card-fade-in'); void v.offsetWidth; v.classList.add('card-fade-in');
+    }
+
+    function renderCard() {
+      const card = getCurrentCard();
+      els.cardInner.classList.remove('is-flipped');
+      state.isFlipped = false;
+      if (!card) {
+        els.frontText.textContent = "无数据";
+        els.backText.textContent = "";
+        els.cardContainer.setAttribute('data-group', 'ok');
+        return;
+      }
+      els.frontText.textContent = card.front;
+      els.backText.textContent = card.back;
+      els.cardContainer.setAttribute('data-group', card.group || 'ok');
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          autoSizeText(els.frontText);
+          autoSizeText(els.backText);
+        });
+      });
+
+      els.groupInputs.forEach(i => i.checked = (i.value === card.group));
+    }
+
+    function toggleFlip() {
+      if (state.viewIds.length > 0) {
+        state.isFlipped = !state.isFlipped;
+        els.cardInner.classList.toggle('is-flipped', state.isFlipped);
+      }
+    }
+
+    function updateStats() {
+      const vLen = state.viewIds.length;
+      const cur = vLen > 0 ? state.index + 1 : 0;
+      els.cardIndex.textContent = `${cur} / ${vLen}`;
+      els.progressBar.style.width = (vLen > 0 ? (cur / vLen) * 100 : 0) + '%';
+    }
+
+    function getCurrentCard() { return state.cards.find(c => c.id === state.viewIds[state.index]); }
+
+    function rebuildView() {
+      let filtered = state.config.filter === 'all' ? state.cards : state.cards.filter(c => c.group === state.config.filter);
+      state.viewIds = (state.config.order === 'shuffle' ? shuffleArray(filtered) : [...filtered].sort((a, b) => a.originalIdx - b.originalIdx)).map(c => c.id);
+      state.index = 0;
+      renderCard(); updateStats();
+    }
+
+    // Fisher-Yates 洗牌算法
+    function shuffleArray(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // 解析文件 → 填充字段下拉菜单
+    async function handleFileUpload() {
+      const file = els.fileInput.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const buffer = e.target.result; let rows = []; const fileName = file.name.toLowerCase();
+
+        // JSON 直接加载（已包含 front/back 结构）
+        if (fileName.endsWith('.json')) {
+          state.cards = JSON.parse(new TextDecoder().decode(buffer)).cards;
+          els.columnPicker.classList.add('empty');
+          rebuildView(); return;
+        }
+
+        if (fileName.endsWith('.csv')) {
+          let text = "";
+          try { text = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(buffer)); }
+          catch { text = new TextDecoder('gbk').decode(new Uint8Array(buffer)); }
+          rows = Papa.parse(text, { header: false, skipEmptyLines: true }).data;
+        } else {
+          try {
+            const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+            rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+          } catch { alert("解析失败"); return; }
+        }
+
+        if (!rows.length) { alert('文件为空'); return; }
+
+        // 检测表头
+        const firstRow = rows[0].map(c => String(c || '').trim());
+        const isHeader = firstRow.some(c => /number|unit|word|pronunciation|pos|meaning|page|单词|释义|正面|背面|英文|中文/i.test(c));
+        const headers = isHeader ? firstRow : rows[0].map((_, i) => `列${i + 1}`);
+        const dataRows = isHeader ? rows.slice(1) : rows;
+        const validRows = dataRows.filter(r => r.some(c => String(c || '').trim()));
+
+        state.pendingRows = validRows;
+        state.headers = headers;
+        state.frontIdx = 0;
+        state.backIdx = Math.min(1, headers.length - 1);
+
+        // 填充下拉菜单
+        els.frontCol.innerHTML = headers.map((h, i) => `<option value="${i}" ${i === 0 ? 'selected' : ''}>${h}</option>`).join('');
+        els.backCol.innerHTML = headers.map((h, i) => `<option value="${i}" ${i === 1 ? 'selected' : ''}>${h}</option>`).join('');
+        els.colCount.textContent = `共 ${validRows.length} 行数据`;
+        els.columnPicker.classList.remove('empty');
+
+        // 自动生成卡片
+        regenerateCards();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // 根据当前选择的列重新生成卡片
+    function regenerateCards() {
+      if (!state.pendingRows.length) return;
+      const fi = state.frontIdx, bi = state.backIdx;
+
+      state.cards = state.pendingRows.map((r, i) => ({
+        id: 'c' + Date.now() + i,
+        front: String(r[fi] || '').trim().replace(/^["'""]|["'""]$/g, ''),
+        back: String(r[bi] || '').trim().replace(/^["'""]|["'""]$/g, ''),
+        group: 'ok', originalIdx: i
+      })).filter(c => c.front || c.back);
+
+      rebuildView();
+    }
+
+    function initTouchEvents() {
+      let startX = 0; const container = document.getElementById('cardContainer');
+      container.addEventListener('touchstart', e => startX = e.changedTouches[0].screenX, {passive: true});
+      container.addEventListener('touchend', e => {
+        const diff = e.changedTouches[0].screenX - startX;
+        if (Math.abs(diff) > 50) move(diff > 0 ? -1 : 1);
+      }, {passive: true});
+    }
+
+    function initDragAndDrop() {
+      const dz = document.getElementById('dropZone');
+      window.ondragover = e => { e.preventDefault(); dz.style.display = 'flex'; };
+      dz.ondrop = e => { e.preventDefault(); dz.style.display = 'none'; els.fileInput.files = e.dataTransfer.files; handleFileUpload(); };
+    }
+
+    function loadFromStorage() {
+      const raw = localStorage.getItem('fc_data');
+      if (!raw) return;
+      try {
+        const d = JSON.parse(raw);
+        state.cards = d.cards || [];
+        state.config = d.config || { order: 'seq', filter: 'all' };
+        if (d.headers && d.headers.length) {
+          state.headers = d.headers;
+          state.frontIdx = d.frontIdx ?? 0;
+          state.backIdx = d.backIdx ?? 1;
+          els.frontCol.innerHTML = d.headers.map((h, i) => `<option value="${i}" ${i === state.frontIdx ? 'selected' : ''}>${h}</option>`).join('');
+          els.backCol.innerHTML = d.headers.map((h, i) => `<option value="${i}" ${i === state.backIdx ? 'selected' : ''}>${h}</option>`).join('');
+          els.colCount.textContent = `共 ${state.cards.length} 张卡片`;
+          els.columnPicker.classList.remove('empty');
+        }
+        rebuildView();
+      } catch {}
+    }
+
+    function exportData() {
+      const blob = new Blob([JSON.stringify({cards: state.cards, config: state.config})], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'flashcards.json'; a.click();
+    }
+
+    document.getElementById('toggleSidebar').onclick = () => document.getElementById('sidebar').classList.add('active');
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); move(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
+      else if (e.key === ' ') { e.preventDefault(); toggleFlip(); }
+    });
+  </script>
+</body>
+</html>
