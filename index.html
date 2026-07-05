@@ -84,6 +84,12 @@
     }
 
     /* 分组视觉覆盖 — 卡片整体变色 */
+    .card-viewport[data-group="ungrouped"] .card-front,
+    .card-viewport[data-group="ungrouped"] .card-back {
+      background: linear-gradient(135deg, rgba(160,160,160,0.15) 0%, #0b1220 100%);
+      border-color: #888;
+      box-shadow: 0 0 40px rgba(160,160,160,0.2), 0 20px 50px rgba(0,0,0,0.5);
+    }
     .card-viewport[data-group="learning"] .card-front,
     .card-viewport[data-group="learning"] .card-back {
       background: linear-gradient(135deg, rgba(255,80,80,0.25) 0%, #0b1220 100%);
@@ -128,8 +134,9 @@
     .seg { display: inline-flex; background: rgba(0, 0, 0, 0.4); padding: 6px; border-radius: 16px; border: 1px solid var(--border); }
     .seg input { display: none; }
     .seg label { padding: 10px 22px; border-radius: 12px; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--muted); transition: 0.2s; }
+    .seg input:checked+label[for="g0"] { background: #888; color: white; }
     .seg input:checked+label[for="g1"] { background: var(--color-learning); color: white; }
-    .seg input:checked+label[for="g2"] { background: rgba(255, 255, 255, 0.2); color: white; }
+    .seg input:checked+label[for="g2"] { background: #ffd43c; color: white; }
     .seg input:checked+label[for="g3"] { background: var(--color-mastered); color: white; }
 
     #dropZone { position: fixed; inset: 0; background: rgba(110, 231, 255, 0.15); backdrop-filter: blur(8px); z-index: 3000; display: none; align-items: center; justify-content: center; border: 4px dashed var(--accent); }
@@ -170,13 +177,13 @@
         <div class="row"><button class="btn-primary" id="btnParse" style="flex:1">解析文件</button><button id="btnClear">清空</button></div>
         <div class="row"><button id="btnSaveLocal" style="flex:1">保存进度</button><button id="btnExport">导出 JSON</button></div>
         <select id="orderSelect" style="width:100%"><option value="seq">原始顺序</option><option value="shuffle">随机打乱</option></select>
-        <select id="groupFilter" style="width:100%"><option value="all">所有分组</option><option value="learning">🔴 不太熟练</option><option value="ok"> 一般</option><option value="mastered">🟢 很熟悉</option></select>
+        <select id="groupFilter" style="width:100%"><option value="all">所有分组</option><option value="ungrouped" selected>⚪ 未分组</option><option value="learning">🔴 不太熟练</option><option value="ok">🟡 一般</option><option value="mastered">🟢 很熟悉</option></select>
         <div class="key-hint">快捷键：←→ 切换卡片 · 空格 翻面 · ↑↓ 切换分组</div>
       </div>
     </aside>
     <section class="flash-zone">
       <div class="progress-container"><div id="progressBar"></div></div>
-      <div class="card-viewport" id="cardContainer" data-group="ok">
+      <div class="card-viewport" id="cardContainer" data-group="ungrouped">
         <div id="examplePopup" class="example-popup" onclick="this.style.display='none'"></div>
         <div class="card-inner" id="cardInner">
           <div class="card-face card-front"><div class="card-content" id="frontText">等待载入...</div></div>
@@ -186,8 +193,9 @@
       <div class="panel" style="padding:15px; margin-top: 25px;">
         <div class="row" style="justify-content: space-between; align-items: center;">
           <div class="seg">
+            <input type="radio" name="g" id="g0" value="ungrouped" checked><label for="g0">未分组</label>
             <input type="radio" name="g" id="g1" value="learning"><label for="g1">不熟</label>
-            <input type="radio" name="g" id="g2" value="ok" checked><label for="g2">一般</label>
+            <input type="radio" name="g" id="g2" value="ok"><label for="g2">一般</label>
             <input type="radio" name="g" id="g3" value="mastered"><label for="g3">熟练</label>
           </div>
           <div class="row">
@@ -208,7 +216,7 @@
   <script>
     let state = {
       cards: [], viewIds: [], index: 0, isFlipped: false,
-      config: { order: 'seq', filter: 'all' },
+      config: { order: 'seq', filter: 'ungrouped' },
       pendingRows: [], headers: [], frontIdx: 0, backIdx: 1
     };
     const els = {
@@ -219,7 +227,7 @@
       progressBar: document.getElementById('progressBar'),
       cardIndex: document.getElementById('cardIndex'),
       fileInput: document.getElementById('fileInput'),
-      groupInputs: [document.getElementById('g1'), document.getElementById('g2'), document.getElementById('g3')],
+      groupInputs: [document.getElementById('g0'), document.getElementById('g1'), document.getElementById('g2'), document.getElementById('g3')],
       popup: document.getElementById('examplePopup'),
       columnPicker: document.getElementById('columnPicker'),
       frontCol: document.getElementById('frontCol'),
@@ -359,12 +367,12 @@
       if (!card) {
         els.frontText.textContent = "无数据";
         els.backText.textContent = "";
-        els.cardContainer.setAttribute('data-group', 'ok');
+        els.cardContainer.setAttribute('data-group', 'ungrouped');
         return;
       }
       els.frontText.textContent = card.front;
       els.backText.textContent = card.back;
-      els.cardContainer.setAttribute('data-group', card.group || 'ok');
+      els.cardContainer.setAttribute('data-group', card.group || 'ungrouped');
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -470,7 +478,7 @@
         id: 'c' + Date.now() + i,
         front: String(r[fi] || '').trim().replace(/^["'""]|["'""]$/g, ''),
         back: String(r[bi] || '').trim().replace(/^["'""]|["'""]$/g, ''),
-        group: 'ok', originalIdx: i
+        group: 'ungrouped', originalIdx: i
       })).filter(c => c.front || c.back);
 
       rebuildView();
