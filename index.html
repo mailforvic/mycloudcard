@@ -328,9 +328,38 @@
       document.getElementById('btnExport').onclick = exportData;
       document.getElementById('btnClear').onclick = () => {
         if (confirm('确定清空数据？')) {
-          state.cards = []; state.pendingRows = []; state.headers = [];
+          state.cards = [];
+          state.pendingRows = [];
+          state.headers = [];
+          state.frontIdx = 0;
+          state.backIdx = 1;
+          state.config = { order: 'seq', filter: 'ungrouped' };
+          state.viewIds = [];
+          state.index = 0;
+          state.isFlipped = false;
+
+          // 重置下拉菜单
+          els.frontCol.innerHTML = '<option>未载入</option>';
+          els.backCol.innerHTML = '<option>未载入</option>';
+          els.colCount.textContent = '选择文件后自动识别字段';
           els.columnPicker.classList.add('empty');
-          rebuildView();
+
+          // 重置侧边栏选项
+          document.getElementById('orderSelect').value = 'seq';
+          document.getElementById('groupFilter').value = 'ungrouped';
+
+          // 重置文件输入
+          els.fileInput.value = '';
+
+          // 清除本地存储
+          localStorage.removeItem('fc_data');
+
+          // 重置卡片显示
+          els.cardInner.classList.remove('is-flipped');
+          els.frontText.textContent = '等待载入...';
+          els.backText.textContent = '';
+          els.cardContainer.setAttribute('data-group', 'ungrouped');
+          updateStats();
         }
       };
 
