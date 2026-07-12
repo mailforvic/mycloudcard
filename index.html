@@ -293,6 +293,9 @@
         initDeckCards(deck, deckId);
       }
 
+      // 把内置卡片数据转为 pendingRows，使列切换功能可用
+      state.pendingRows = deck.cards.map(c => [c.front, c.back]);
+
       // 更新 UI
       // 根据词库类型设置正确的列名，支持切换正反面
       const isSentence = deckId === 'jiushang_66note';
@@ -702,16 +705,21 @@
       if (!state.pendingRows.length) return;
       const fi = state.frontIdx, bi = state.backIdx;
 
+      // 保存旧的分组状态
+      const oldGroups = {};
+      state.cards.forEach(c => { oldGroups[c.originalIdx] = c.group; });
+
       // 覆盖前先保存当前进度
       if (state.cards.length > 0) {
         autoSaveDeck(getCurrentDeckId());
       }
 
+      const deckId = getCurrentDeckId();
       state.cards = state.pendingRows.map((r, i) => ({
-        id: 'c' + Date.now() + i,
+        id: deckId ? deckId + '_' + i : ('c' + Date.now() + i),
         front: String(r[fi] || '').trim().replace(/^["'""]|["'""]$/g, ''),
         back: String(r[bi] || '').trim().replace(/^["'""]|["'""]$/g, ''),
-        group: 'ungrouped', originalIdx: i
+        group: oldGroups[i] || 'ungrouped', originalIdx: i
       })).filter(c => c.front || c.back);
 
       rebuildView();
